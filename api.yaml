@@ -1,0 +1,605 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+        "title": "Canvas API",
+        "version": "1.0",
+        "contact": {
+            "name": "Xavier Basty-Kjellberg",
+            "email": "xavier@hexbee.net"
+        },
+        "description": "API of the Canvas application"
+    },
+    "servers": [
+        {
+            "url": "http://localhost:8800",
+            "description": "development"
+        }
+    ],
+    "paths": {
+        "/": {
+            "get": {
+                "summary": "API versions",
+                "tags": [
+                        "meta"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/Version"
+                                    }
+                                },
+                                "examples": {
+                                    "example-1": {
+                                        "value": [
+                                            {
+                                                "status": "CURRENT",
+                                                "updated": "2019-08-24T14:15:22Z",
+                                                "id": "v1.0",
+                                                "href": "http://127.0.0.1:8800/v1/"
+                                            },
+                                            {
+                                                "status": "EXPERIMENTAL",
+                                                "updated": "2019-08-24T14:15:22Z",
+                                                "id": "v2.0",
+                                                "href": "http://127.0.0.1:8800/v2/"
+                                            }
+                                        ]
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "300": {
+                        "description": "Multiple Choices",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/Version"
+                                    }
+                                },
+                                "examples": {
+                                    "example-1": {
+                                        "value": [
+                                            {
+                                                "status": "CURRENT",
+                                                "updated": "2019-08-24T14:15:22Z",
+                                                "id": "v1.0",
+                                                "href": "http://127.0.0.1:8800/v1/"
+                                            },
+                                            {
+                                                "status": "EXPERIMENTAL",
+                                                "updated": "2019-08-24T14:15:22Z",
+                                                "id": "v2.0",
+                                                "href": "http://127.0.0.1:8800/v2/"
+                                            }
+                                        ]
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "operationId": "get-versions",
+                "description": "Get the available versions"
+            },
+            "parameters": []
+        },
+        "/v1/docs": {
+            "get": {
+                "summary": "Get documents list",
+                "tags": [
+                        "document"
+                ],
+                "operationId": "get-docs",
+                "description": "Get existing documents\n",
+                "parameters": [
+                    {
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "in": "query",
+                        "name": "limit",
+                        "description": "The maximum number of documents to retrieve per page (default 5)"
+                    },
+                    {
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "in": "query",
+                        "name": "page",
+                        "description": "The number of the page to get"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "links": {
+                                            "$ref": "#/components/schemas/PageLinks"
+                                        },
+                                        "count": {
+                                            "type": "integer"
+                                        },
+                                        "total": {
+                                            "type": "integer"
+                                        },
+                                        "docs": {
+                                            "type": "object",
+                                            "additionalProperties": {
+                                                "type": "string",
+                                                "format": "uri"
+                                            }
+                                        }
+                                    },
+                                    "required": [
+                                            "count",
+                                            "total"
+                                    ]
+                                },
+                                "examples": {
+                                    "example-1": {
+                                        "value": {
+                                            "links": {
+                                                "self": "http://localhost:8800/v1/docs?page=3",
+                                                "first": "http://localhost:8800/v1/docs",
+                                                "prev": "http://localhost:8800/v1/docs?page=2",
+                                                "next": "http://localhost:8800/v1/docs?page=4",
+                                                "last": "http://localhost:8800/v1/docs?page=47"
+                                            },
+                                            "count": 5,
+                                            "total": 234,
+                                            "docs": {
+                                                "doc 11": "http://localhost:8800/v1/docs/11",
+                                                "doc 12": "http://localhost:8800/v1/docs/12",
+                                                "doc 13": "http://localhost:8800/v1/docs/13",
+                                                "doc 14": "http://localhost:8800/v1/docs/14",
+                                                "doc 15": "http://localhost:8800/v1/docs/15"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "summary": "Create new document",
+                "operationId": "create-doc",
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string",
+                                    "format": "uri"
+                                },
+                                "examples": {
+                                    "example-1": {
+                                        "value": "http://localhost:8800/v1/docs/11"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "description": "Create a new document\n",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Canvas"
+                            },
+                            "examples": {
+                                "existing-data": {
+                                    "value": {
+                                        "width": 80,
+                                        "height": 25,
+                                        "data": "@@@@@ @XXX@ XXXXXXXXXXXXXX @@@@@ XOOOOOOOOOOOOX XOOOOOOOOOOOOX XOOOOOOOOOOOOX XOOOOOOOOOOOOX XXXXXXXXXXXXXX"
+                                    }
+                                },
+                                "empty-canvas": {
+                                    "value": {
+                                        "width": 80,
+                                        "height": 25
+                                    }
+                                }
+                            }
+                        },
+                        "application/xml": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Canvas"
+                            }
+                        }
+                    },
+                    "description": "Document parameters"
+                },
+                "tags": [
+                        "document"
+                ]
+            },
+            "parameters": []
+        },
+        "/v1/docs/{id}": {
+            "parameters": [
+                {
+                    "schema": {
+                        "type": "string"
+                    },
+                    "name": "id",
+                    "in": "path",
+                    "required": true
+                }
+            ],
+            "get": {
+                "summary": "Get document",
+                "tags": [
+                        "document"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "operations": {
+                                            "type": "object",
+                                            "additionalProperties": {
+                                                "$ref": "#/components/schemas/Operation"
+                                            }
+                                        },
+                                        "canvas": {
+                                            "$ref": "#/components/schemas/Canvas"
+                                        }
+                                    }
+                                },
+                                "examples": {
+                                    "example-1": {
+                                        "value": {
+                                            "operations": {
+                                                "delete": {
+                                                    "name": "Delete document",
+                                                    "href": "http://127.0.0.1:8800/v1/123"
+                                                },
+                                                "add-rectangle": {
+                                                    "name": "Add rectangle",
+                                                    "href": "http://127.0.0.1:8800/v1/123/rect"
+                                                },
+                                                "add-fill": {
+                                                    "name": "Fill area",
+                                                    "href": "http://127.0.0.1:8800/v1/123/fill"
+                                                }
+                                            },
+                                            "canvas": {
+                                                "width": 80,
+                                                "height": 25,
+                                                "data": "###---###"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found"
+                    }
+                },
+                "operationId": "get-v1-id",
+                "description": "Get the content of a document"
+            },
+            "delete": {
+                "summary": "Delete document",
+                "operationId": "delete-v1-id",
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "404": {
+                        "description": "Not Found"
+                    }
+                },
+                "tags": [
+                        "document"
+                ],
+                "description": "Delete a document"
+            }
+        },
+        "/v1/{id}/rect": {
+            "parameters": [
+                {
+                    "schema": {
+                        "type": "string"
+                    },
+                    "name": "id",
+                    "in": "path",
+                    "required": true
+                }
+            ],
+            "post": {
+                "summary": "Add rectangle to document",
+                "operationId": "post-v1-id-rect",
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "400": {
+                        "description": "Bad Request"
+                    },
+                    "404": {
+                        "description": "Not Found"
+                    }
+                },
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "rect": {
+                                        "$ref": "#/components/schemas/Rectangle"
+                                    },
+                                    "fill": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 1
+                                    },
+                                    "outline": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 1
+                                    }
+                                },
+                                "required": [
+                                        "rect"
+                                ]
+                            },
+                            "examples": {
+                                "example-1": {
+                                    "value": {
+                                        "rect": {
+                                            "origin": {
+                                                "x": 5,
+                                                "y": 5
+                                            },
+                                            "width": 10,
+                                            "height": 4
+                                        },
+                                        "fill": "X",
+                                        "outline": "@"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "tags": [
+                        "operation"
+                ],
+                "description": "Draw a rectangle in a document."
+            }
+        },
+        "/v1/docs/{id}/fill": {
+            "parameters": [
+                {
+                    "schema": {
+                        "type": "string"
+                    },
+                    "name": "id",
+                    "in": "path",
+                    "required": true
+                }
+            ],
+            "post": {
+                "summary": "Add flood-fill to document",
+                "operationId": "post-v1-id-fill",
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "404": {
+                        "description": "Not Found"
+                    }
+                },
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "origin": {
+                                        "$ref": "#/components/schemas/Point"
+                                    },
+                                    "fill": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 1
+                                    }
+                                },
+                                "required": [
+                                        "origin",
+                                        "fill"
+                                ]
+                            }
+                        }
+                    }
+                },
+                "tags": [
+                        "operation"
+                ],
+                "description": "Execute a flood-fill operation in a document"
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "Version": {
+                "title": "Version",
+                "type": "object",
+                "properties": {
+                    "status": {
+                        "type": "string",
+                        "enum": [
+                                "DEPRECATED",
+                                "CURRENT",
+                                "EXPERIMENTAL"
+                        ]
+                    },
+                    "updated": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "id": {
+                        "type": "string"
+                    },
+                    "href": {
+                        "type": "string",
+                        "format": "uri"
+                    }
+                },
+                "required": [
+                        "id",
+                        "href"
+                ]
+            },
+            "Canvas": {
+                "description": "",
+                "type": "object",
+                "x-examples": {
+                    "example-1": {
+                        "width": 80,
+                        "height": 25,
+                        "data": "@@@@@ @XXX@ XXXXXXXXXXXXXX @@@@@ XOOOOOOOOOOOOX XOOOOOOOOOOOOX XOOOOOOOOOOOOX XOOOOOOOOOOOOX XXXXXXXXXXXXXX"
+                    }
+                },
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "width": {
+                        "type": "number",
+                        "exclusiveMinimum": 0
+                    },
+                    "height": {
+                        "type": "number",
+                        "exclusiveMinimum": 0
+                    },
+                    "data": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                        "width",
+                        "height"
+                ]
+            },
+            "PageLinks": {
+                "title": "Paginated list links",
+                "type": "object",
+                "properties": {
+                    "self": {
+                        "type": "string",
+                        "format": "uri"
+                    },
+                    "first": {
+                        "type": "string",
+                        "format": "uri"
+                    },
+                    "prev": {
+                        "type": "string",
+                        "format": "uri"
+                    },
+                    "next": {
+                        "type": "string",
+                        "format": "uri"
+                    },
+                    "last": {
+                        "type": "string",
+                        "format": "uri"
+                    }
+                },
+                "required": [
+                        "first",
+                        "last"
+                ]
+            },
+            "Operation": {
+                "title": "Operation",
+                "type": "object",
+                "description": "Available operations on a document",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "href": {
+                        "type": "string"
+                    }
+                }
+            },
+            "Point": {
+                "title": "Point",
+                "type": "object",
+                "properties": {
+                    "x": {
+                        "type": "integer"
+                    },
+                    "y": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                        "x",
+                        "y"
+                ]
+            },
+            "Rectangle": {
+                "title": "Rectangle",
+                "type": "object",
+                "properties": {
+                    "origin": {
+                        "$ref": "#/components/schemas/Point"
+                    },
+                    "width": {
+                        "type": "integer"
+                    },
+                    "height": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                        "origin",
+                        "width",
+                        "height"
+                ]
+            }
+        }
+    },
+    "tags": [
+        {
+            "name": "document"
+        },
+        {
+            "name": "meta"
+        },
+        {
+            "name": "operation"
+        }
+    ]
+}
