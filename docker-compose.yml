@@ -1,0 +1,17 @@
+version: "3.9"
+services:
+    redis:
+        image: "redis:alpine"
+        hostname: redis
+        ports:
+            - "6379:6379"
+
+    canvas:
+        build:
+            context: .
+            dockerfile: server.Dockerfile
+        depends_on:
+            -   redis
+        ports:
+            - "8800:8800"
+        command: -s "redis:6379" -p 8800
