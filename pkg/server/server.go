@@ -119,8 +119,42 @@ func (s *Server) Start(ctx context.Context) {
 }
 
 func (s *Server) getVersions(w http.ResponseWriter, r *http.Request) {
-	log.Info("TODO: getVersions")
+	type version struct {
+		Status  string `json:"status"`
+		Updated string `json:"updated"`
+		ID      string `json:"id"`
+		Href    string `json:"href"`
+	}
+
+	reqLog := log.
+		WithField("operation-id", "get-versions").
+		WithField("request-id", s.getRequestID(r))
+
+	reqLog.Debug("received get versions request")
+
+	versions := []version{
+		{
+			Status:  "CURRENT",
+			Updated: "2021-10-21-24T00:40:00Z",
+			ID:      "v1.0",
+			Href:    path.Join(r.URL.String(), "v1/"),
+		},
+	}
+
+	data, err := jsonMarshal(versions)
+	if err != nil {
+		reqLog.WithError(err).Error("failed to marshal response to json")
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
+
+	if _, err := w.Write(data); err != nil {
+		reqLog.WithError(err).Error("failed to write http response")
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+	}
 }
 
 func (s *Server) getDocumentList(w http.ResponseWriter, r *http.Request) {
