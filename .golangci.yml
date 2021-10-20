@@ -56,3 +56,5 @@ linters:
 linters-settings:
   gci:
     local-prefixes: github.com/hexbee-net/sketch-canvas
+  cyclop:
+    max-complexity: 15

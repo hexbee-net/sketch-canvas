@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path"
 	"strings"
 	"testing"
 
@@ -336,6 +337,111 @@ func TestServer_deleteDocument(t *testing.T) {
 			testSrv.server.router.ServeHTTP(w, httptest.NewRequest(http.MethodDelete, "/v1/docs/123", strings.NewReader("")))
 
 			assert.Equal(t, tt.response, w.Code)
+		})
+	}
+}
+
+func TestServer_Operations(t *testing.T) {
+	type storeGetCommand struct {
+		docID string
+		doc   *canvas.Canvas
+		err   error
+	}
+	type storeSetCommand struct {
+		docID string
+		doc   interface{}
+		err   error
+	}
+	type args struct {
+		operation string
+		body      string
+	}
+	type response struct {
+		code int
+	}
+	tests := []struct {
+		name       string
+		args       args
+		getCommand storeGetCommand
+		setCommand storeSetCommand
+		response   response
+		checkBody  bool
+	}{
+		{
+			name: "rect ok",
+			args: args{
+				operation: "rect",
+				body:      `{"rect":{"origin":{"x":5,"y":5},"width":10,"height":4},"fill":"X","outline":"@"}`,
+			},
+			getCommand: storeGetCommand{
+				docID: mock.Anything,
+				doc:   &canvas.Canvas{},
+				err:   nil,
+			},
+			setCommand: storeSetCommand{
+				docID: mock.Anything,
+				doc:   mock.Anything,
+				err:   nil,
+			},
+			response: response{
+				code: http.StatusOK,
+			},
+			checkBody: true,
+		},
+		{
+			name: "rect - missing parameters",
+			args: args{
+				operation: "rect",
+				body:      `{"rect":{"origin":{"x":5,"y":5},"width":10,"height":4}}`,
+			},
+			getCommand: storeGetCommand{
+				docID: mock.Anything,
+				doc:   &canvas.Canvas{},
+				err:   nil,
+			},
+			setCommand: storeSetCommand{
+				docID: mock.Anything,
+				doc:   mock.Anything,
+				err:   nil,
+			},
+			response: response{
+				code: http.StatusBadRequest,
+			},
+			checkBody: true,
+		},
+		{
+			name: "fill ok",
+			args: args{
+				operation: "fill",
+				body:      `{"origin":{"x":5,"y":5},"fill":"X"}`,
+			},
+			getCommand: storeGetCommand{
+				docID: mock.Anything,
+				doc:   &canvas.Canvas{},
+				err:   nil,
+			},
+			setCommand: storeSetCommand{
+				docID: mock.Anything,
+				doc:   mock.Anything,
+				err:   nil,
+			},
+			response: response{
+				code: http.StatusOK,
+			},
+			checkBody: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			testSrv := testServer(t)
+
+			testSrv.storeMock.On("GetDocument", tt.getCommand.docID, mock.Anything).Return(tt.getCommand.doc, tt.getCommand.err)
+			testSrv.storeMock.On("SetDocument", tt.setCommand.docID, tt.setCommand.doc, mock.Anything).Return(tt.setCommand.err)
+			w := httptest.NewRecorder()
+
+			testSrv.server.router.ServeHTTP(w, httptest.NewRequest(http.MethodPost, path.Join("/v1/docs/123/", tt.args.operation), strings.NewReader(tt.args.body)))
+
+			assert.Equal(t, tt.response.code, w.Code)
 		})
 	}
 }

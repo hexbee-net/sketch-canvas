@@ -3,6 +3,7 @@ package canvas
 import (
 	"encoding/json"
 
+	"github.com/apex/log"
 	"golang.org/x/xerrors"
 )
 
@@ -20,4 +21,23 @@ func (c *Canvas) MarshalBinary() (data []byte, err error) {
 	}
 
 	return data, nil
+}
+
+func (c *Canvas) DrawRect(rect *Rectangle, fill string, outline string) error {
+	log.
+		WithField("rect", rect).
+		WithField("fill", fill).
+		WithField("outline", outline).
+		Error("TODO - Canvas.DrawRect")
+
+	return nil
+}
+
+func (c *Canvas) FloodFill(origin *Point, fill string) error {
+	log.
+		WithField("origin", origin).
+		WithField("fill", fill).
+		Error("TODO - Canvas.FloodFill")
+
+	return nil
 }

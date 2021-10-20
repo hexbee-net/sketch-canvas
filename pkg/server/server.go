@@ -225,7 +225,7 @@ func (s *Server) getDocumentList(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) createDocument(w http.ResponseWriter, r *http.Request) {
 	var (
-		doc    canvas.Canvas
+		doc    = &canvas.Canvas{}
 		store  = s.getStore(r)
 		reqLog = log.
 			WithField("operation-id", "create-doc").
@@ -234,16 +234,16 @@ func (s *Server) createDocument(w http.ResponseWriter, r *http.Request) {
 
 	reqLog.Debug("received create document request")
 
-	if err := json.NewDecoder(r.Body).Decode(&doc); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(doc); err != nil {
 		reqLog.WithField("body", r.Body).WithError(err).Infof("failed to decode request body")
 		http.Error(w, err.Error(), http.StatusBadRequest)
 
 		return
 	}
 
-	id := s.keygen.Generate()
+	docID := s.keygen.Generate()
 
-	if err := store.SetDocument(id, &doc, r.Context()); err != nil {
+	if err := store.SetDocument(docID, doc, r.Context()); err != nil {
 		reqLog.WithError(err).Error("failed to set document in redis store")
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 
@@ -251,13 +251,13 @@ func (s *Server) createDocument(w http.ResponseWriter, r *http.Request) {
 	}
 
 	reqLog.
-		WithField("doc-id", id).
+		WithField("doc-id", docID).
 		Infof("document created")
 
 	w.WriteHeader(http.StatusCreated)
 
-	if _, err := w.Write([]byte(path.Join(r.RequestURI, id))); err != nil {
-		reqLog.WithField("doc-key", id).WithError(err).Error("failed to write http response")
+	if _, err := w.Write([]byte(path.Join(r.RequestURI, docID))); err != nil {
+		reqLog.WithField("doc-key", docID).WithError(err).Error("failed to write http response")
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 	}
 }
@@ -351,11 +351,160 @@ func (s *Server) deleteDocument(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) addRectangle(w http.ResponseWriter, r *http.Request) {
-	log.Info("TODO: addRectangle")
+	type rectRequest struct {
+		Rect    canvas.Rectangle `json:"rect"`
+		Fill    string           `json:"fill,omitempty"`
+		Outline string           `json:"outline,omitempty"`
+	}
+
+	var (
+		req    rectRequest
+		store  = s.getStore(r)
+		vars   = mux.Vars(r)
+		docID  = vars["id"]
+		reqLog = log.
+			WithField("operation-id", "add-rect").
+			WithField("request-id", s.getRequestID(r)).
+			WithField("doc-id", docID)
+	)
+
+	reqLog.Debug("received draw rectangle request")
+
+	doc, err := store.GetDocument(docID, r.Context())
+	if err != nil {
+		switch err {
+		case datastore.NotFound:
+			reqLog.Info("document not found")
+			http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+		case err:
+			reqLog.WithError(err).Error("failed to marshal response to json")
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		}
+
+		return
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		reqLog.WithField("body", r.Body).WithError(err).Infof("failed to decode request body")
+		http.Error(w, err.Error(), http.StatusBadRequest)
+
+		return
+	}
+
+	if req.Fill == "" && req.Outline == "" {
+		reqLog.WithError(err).Infof("none of fill our outline is specified")
+		http.Error(w, "at least one of fill or outline is required", http.StatusBadRequest)
+
+		return
+	}
+
+	if err := doc.DrawRect(&req.Rect, req.Fill, req.Outline); err != nil {
+		reqLog.WithError(err).Infof("failed to update doc content")
+		http.Error(w, err.Error(), http.StatusConflict)
+
+		return
+	}
+
+	if err := store.SetDocument(docID, doc, r.Context()); err != nil {
+		reqLog.WithError(err).Error("failed to set document in redis store")
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+
+		return
+	}
+
+	data, err := jsonMarshal(doc)
+
+	if err != nil {
+		reqLog.WithError(err).Error("failed to marshal response to json")
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	if _, err := w.Write(data); err != nil {
+		reqLog.WithError(err).Error("failed to write http response")
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+	}
 }
 
 func (s *Server) addFloodFill(w http.ResponseWriter, r *http.Request) {
-	log.Info("TODO: addFloodFill")
+	type fillRequest struct {
+		Origin canvas.Point `json:"origin"`
+		Fill   string       `json:"fill,omitempty"`
+	}
+
+	var (
+		req    fillRequest
+		store  = s.getStore(r)
+		vars   = mux.Vars(r)
+		docID  = vars["id"]
+		reqLog = log.
+			WithField("operation-id", "add-flood-fill").
+			WithField("request-id", s.getRequestID(r)).
+			WithField("doc-id", docID)
+	)
+
+	reqLog.Debug("received add flood fill request")
+
+	doc, err := store.GetDocument(docID, r.Context())
+	if err != nil {
+		switch err {
+		case datastore.NotFound:
+			reqLog.Info("document not found")
+			http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+		case err:
+			reqLog.WithError(err).Error("failed to marshal response to json")
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		}
+
+		return
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		reqLog.WithField("body", r.Body).WithError(err).Infof("failed to decode request body")
+		http.Error(w, err.Error(), http.StatusBadRequest)
+
+		return
+	}
+
+	if req.Fill == "" {
+		reqLog.WithError(err).Infof("fill is not specified")
+		http.Error(w, "fill character is required", http.StatusBadRequest)
+
+		return
+	}
+
+	if err := doc.FloodFill(&req.Origin, req.Fill); err != nil {
+		reqLog.WithError(err).Infof("failed to update doc content")
+		http.Error(w, err.Error(), http.StatusConflict)
+
+		return
+	}
+
+	if err := store.SetDocument(docID, doc, r.Context()); err != nil {
+		reqLog.WithError(err).Error("failed to set document in redis store")
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+
+		return
+	}
+
+	data, err := jsonMarshal(doc)
+
+	if err != nil {
+		reqLog.WithError(err).Error("failed to marshal response to json")
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	if _, err := w.Write(data); err != nil {
+		reqLog.WithError(err).Error("failed to write http response")
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+	}
 }
 
 // getStore retrieves the data store connection from the context.

@@ -268,6 +268,7 @@
                                                 "add-flood-fill": "http://127.0.0.1:8800/v1/123/fill"
                                             },
                                             "canvas": {
+                                                "name": "doc1",
                                                 "width": 80,
                                                 "height": 25,
                                                 "data": "###---###"
@@ -318,7 +319,24 @@
                 "operationId": "add-rect",
                 "responses": {
                     "200": {
-                        "description": "OK"
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Canvas"
+                                },
+                                "examples": {
+                                    "example-1": {
+                                        "value": {
+                                            "name": "doc1",
+                                            "width": 80,
+                                            "height": 25,
+                                            "data": "###---###"
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     },
                     "400": {
                         "description": "Bad Request"
@@ -392,7 +410,24 @@
                 "operationId": "add-flood-fill",
                 "responses": {
                     "200": {
-                        "description": "OK"
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Canvas"
+                                },
+                                "examples": {
+                                    "example-1": {
+                                        "value": {
+                                            "name": "doc1",
+                                            "width": 80,
+                                            "height": 25,
+                                            "data": "###---###"
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     },
                     "404": {
                         "description": "Not Found"
