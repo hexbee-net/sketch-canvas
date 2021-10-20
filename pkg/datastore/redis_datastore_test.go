@@ -9,6 +9,8 @@ import (
 	"github.com/go-redis/redismock/v8"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/xerrors"
+
+	"github.com/hexbee-net/sketch-canvas/pkg/canvas"
 )
 
 func TestNew(t *testing.T) {
@@ -113,7 +115,7 @@ func TestRedisDataStore_GetSize(t *testing.T) {
 
 			size, err := s.GetSize(context.TODO())
 			if (err != nil) != tt.wantErr {
-				t.Errorf("SetDocument() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("GetSize() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			assert.Equal(t, tt.expected, size)
 		})
@@ -123,7 +125,7 @@ func TestRedisDataStore_GetSize(t *testing.T) {
 func TestRedisDataStore_SetDocument(t *testing.T) {
 	type args struct {
 		key   string
-		value interface{}
+		value *canvas.Canvas
 	}
 	type command struct {
 		val string
@@ -139,7 +141,7 @@ func TestRedisDataStore_SetDocument(t *testing.T) {
 			name: "redis OK",
 			args: args{
 				key:   "doc1",
-				value: struct{ value int }{value: 1},
+				value: &canvas.Canvas{Name: "canvas1"},
 			},
 			cmd: command{
 				val: "OK",
@@ -151,7 +153,7 @@ func TestRedisDataStore_SetDocument(t *testing.T) {
 			name: "redis null",
 			args: args{
 				key:   "doc1",
-				value: struct{ value int }{value: 1},
+				value: &canvas.Canvas{Name: "canvas1"},
 			},
 			cmd: command{
 				val: "",
@@ -163,7 +165,7 @@ func TestRedisDataStore_SetDocument(t *testing.T) {
 			name: "redis error",
 			args: args{
 				key:   "doc1",
-				value: struct{ value int }{value: 1},
+				value: &canvas.Canvas{Name: "canvas1"},
 			},
 			cmd: command{
 				val: "",
@@ -259,13 +261,114 @@ func TestRedisDataStore_GetDocList(t *testing.T) {
 
 			keys, cursor, err := s.GetDocList(tt.args.cursor, tt.args.count, context.TODO())
 			if (err != nil) != tt.wantErr {
-				t.Errorf("SetDocument() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("GetDocList() error = %v, wantErr %v", err, tt.wantErr)
 			}
 
 			assert.Equal(t, tt.expected.keys, keys)
 			assert.Equal(t, tt.expected.cursor, cursor)
 
 			assert.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}
+
+func TestRedisDataStore_GetDocument(t *testing.T) {
+	type args struct {
+		key string
+	}
+	type command struct {
+		value string
+		err   error
+	}
+	type expected struct {
+		doc *canvas.Canvas
+	}
+	tests := []struct {
+		name     string
+		args     args
+		cmd      command
+		expected expected
+		wantErr  bool
+	}{
+		{
+			name: "redis OK",
+			args: args{
+				key: "123",
+			},
+			cmd: command{
+				value: `{"name":"doc1","width":80,"height":25,"data":"-#-"}`,
+				err:   nil,
+			},
+			expected: expected{
+				doc: &canvas.Canvas{
+					Name:   "doc1",
+					Width:  80,
+					Height: 25,
+					Data:   "-#-",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "redis error",
+			args: args{
+				"123",
+			},
+			cmd: command{
+				value: "",
+				err:   xerrors.New("FAILED"),
+			},
+			expected: expected{
+				doc: nil,
+			},
+			wantErr: true,
+		},
+		{
+			name: "bad data",
+			args: args{
+				"123",
+			},
+			cmd: command{
+				value: "invalid",
+				err:   nil,
+			},
+			expected: expected{
+				doc: nil,
+			},
+			wantErr: true,
+		},
+		{
+			name: "empty data",
+			args: args{
+				"123",
+			},
+			cmd: command{
+				value: "",
+				err:   nil,
+			},
+			expected: expected{
+				doc: nil,
+			},
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db, mock := redismock.NewClientMock()
+			s := &RedisDataStore{
+				rdb: db,
+			}
+
+			cmd := mock.ExpectGet(tt.args.key)
+			cmd.SetVal(tt.cmd.value)
+			cmd.SetErr(tt.cmd.err)
+
+			doc, err := s.GetDocument(tt.args.key, context.TODO())
+			assert.Equal(t, tt.expected.doc, doc)
+
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GetDocument() error = %v, wantErr %v", err, tt.wantErr)
+			}
 		})
 	}
 }

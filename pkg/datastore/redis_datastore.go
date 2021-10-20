@@ -2,10 +2,14 @@ package datastore
 
 import (
 	"context"
+	"encoding/json"
+	"strings"
 
 	"github.com/apex/log"
 	"github.com/go-redis/redis/v8"
 	"golang.org/x/xerrors"
+
+	"github.com/hexbee-net/sketch-canvas/pkg/canvas"
 )
 
 type RedisOptions struct {
@@ -61,10 +65,24 @@ func (s *RedisDataStore) GetDocList(cursor uint64, count int64, ctx context.Cont
 	return keys, cursor, nil
 }
 
-func (s *RedisDataStore) SetDocument(key string, value interface{}, ctx context.Context) error {
-	if err := s.rdb.Set(ctx, key, value, 0).Err(); err != nil {
+func (s *RedisDataStore) SetDocument(key string, doc *canvas.Canvas, ctx context.Context) error {
+	if err := s.rdb.Set(ctx, key, doc, 0).Err(); err != nil {
 		return xerrors.Errorf("failed to set document in redis store: %w", err)
 	}
 
 	return nil
+}
+
+func (s *RedisDataStore) GetDocument(key string, ctx context.Context) (*canvas.Canvas, error) {
+	cmd := s.rdb.Get(ctx, key)
+	if err := cmd.Err(); err != nil {
+		return nil, xerrors.Errorf("failed to retrieve object from redis store: %w", err)
+	}
+
+	doc := canvas.Canvas{}
+	if err := json.NewDecoder(strings.NewReader(cmd.Val())).Decode(&doc); err != nil {
+		return nil, xerrors.Errorf("failed to unmarshal document from redis store: %w", err)
+	}
+
+	return &doc, nil
 }
