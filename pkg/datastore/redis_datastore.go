@@ -95,3 +95,16 @@ func (s *RedisDataStore) GetDocument(key string, ctx context.Context) (*canvas.C
 
 	return &doc, nil
 }
+
+func (s *RedisDataStore) DeleteDocument(key string, ctx context.Context) error {
+	del := s.rdb.Del(ctx, key)
+	if err := del.Err(); err != nil {
+		return xerrors.Errorf("failed to delete object from redis store: %w", err)
+	}
+
+	if del.Val() == 0 {
+		return NotFound
+	}
+
+	return nil
+}

@@ -429,3 +429,70 @@ func TestRedisDataStore_GetDocument(t *testing.T) {
 		})
 	}
 }
+
+func TestRedisDataStore_DeleteDocument(t *testing.T) {
+	type args struct {
+		key string
+	}
+	type delCommand struct {
+		value int64
+		err   error
+	}
+	tests := []struct {
+		name       string
+		args       args
+		delCommand delCommand
+		wantErr    bool
+	}{
+		{
+			name: "ok",
+			args: args{
+				key: "123",
+			},
+			delCommand: delCommand{
+				value: 1,
+				err:   nil,
+			},
+			wantErr: false,
+		},
+		{
+			name: "del error",
+			args: args{
+				"123",
+			},
+			delCommand: delCommand{
+				value: 0,
+				err:   xerrors.New("FAILED"),
+			},
+			wantErr: true,
+		},
+		{
+			name: "not found",
+			args: args{
+				"123",
+			},
+			delCommand: delCommand{
+				value: 0,
+				err:   nil,
+			},
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db, mock := redismock.NewClientMock()
+			s := &RedisDataStore{
+				rdb: db,
+			}
+
+			expectDel := mock.ExpectDel(tt.args.key)
+			expectDel.SetVal(tt.delCommand.value)
+			expectDel.SetErr(tt.delCommand.err)
+
+			err := s.DeleteDocument(tt.args.key, context.TODO())
+			if (err != nil) != tt.wantErr {
+				t.Errorf("DeleteDocument() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}

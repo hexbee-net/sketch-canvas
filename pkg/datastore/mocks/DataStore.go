@@ -15,6 +15,20 @@ type DataStore struct {
 	mock.Mock
 }
 
+// DeleteDocument provides a mock function with given fields: key, ctx
+func (_m *DataStore) DeleteDocument(key string, ctx context.Context) error {
+	ret := _m.Called(key, ctx)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(string, context.Context) error); ok {
+		r0 = rf(key, ctx)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
 // GetDocList provides a mock function with given fields: cursor, count, ctx
 func (_m *DataStore) GetDocList(cursor uint64, count int64, ctx context.Context) ([]string, uint64, error) {
 	ret := _m.Called(cursor, count, ctx)

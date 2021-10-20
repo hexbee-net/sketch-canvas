@@ -20,4 +20,5 @@ type DataStore interface {
 	GetDocList(cursor uint64, count int64, ctx context.Context) ([]string, uint64, error)
 	SetDocument(key string, doc *canvas.Canvas, ctx context.Context) error
 	GetDocument(key string, ctx context.Context) (*canvas.Canvas, error)
+	DeleteDocument(key string, ctx context.Context) error
 }
