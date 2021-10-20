@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-redis/redis/v8"
 	"github.com/go-redis/redismock/v8"
+	"github.com/stretchr/testify/assert"
 	"golang.org/x/xerrors"
 )
 
@@ -65,6 +66,56 @@ func TestNew(t *testing.T) {
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("New() got = %v, want %v", got, tt.want)
 			}
+		})
+	}
+}
+
+func TestRedisDataStore_GetSize(t *testing.T) {
+	type command struct {
+		val int64
+		err error
+	}
+	tests := []struct {
+		name     string
+		cmd      command
+		expected int64
+		wantErr  bool
+	}{
+		{
+			name: "redis OK",
+			cmd: command{
+				val: 12,
+				err: nil,
+			},
+			expected: 12,
+			wantErr:  false,
+		},
+		{
+			name: "redis error",
+			cmd: command{
+				val: 0,
+				err: xerrors.New("FAILED"),
+			},
+			expected: 0,
+			wantErr:  true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db, mock := redismock.NewClientMock()
+			s := &RedisDataStore{
+				rdb: db,
+			}
+
+			cmd := mock.ExpectDBSize()
+			cmd.SetVal(tt.cmd.val)
+			cmd.SetErr(tt.cmd.err)
+
+			size, err := s.GetSize(context.TODO())
+			if (err != nil) != tt.wantErr {
+				t.Errorf("SetDocument() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			assert.Equal(t, tt.expected, size)
 		})
 	}
 }

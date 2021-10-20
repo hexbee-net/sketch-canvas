@@ -41,6 +41,14 @@ func New(options *RedisOptions, ctx context.Context) (*RedisDataStore, error) {
 	return &store, nil
 }
 
+func (s *RedisDataStore) GetSize(ctx context.Context) (int64, error) {
+	size := s.rdb.DBSize(ctx)
+	if err := size.Err(); err != nil {
+		return 0, xerrors.Errorf("failed to retrieve size of redis store: %w", err)
+	}
+	return size.Val(), nil
+}
+
 func (s *RedisDataStore) SetDocument(key string, value interface{}, ctx context.Context) error {
 	if err := s.rdb.Set(ctx, key, value, 0).Err(); err != nil {
 		return xerrors.Errorf("failed to set document in redis store: %w", err)
