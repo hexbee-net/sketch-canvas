@@ -6,7 +6,8 @@ import (
 	"time"
 
 	"github.com/apex/log"
-	"github.com/apex/log/handlers/text"
+	logJson "github.com/apex/log/handlers/json"
+	logText "github.com/apex/log/handlers/text"
 	flags "github.com/spf13/pflag"
 
 	"github.com/hexbee-net/sketch-canvas/pkg/datastore"
@@ -19,7 +20,7 @@ const (
 )
 
 func main() {
-	log.SetHandler(text.New(os.Stdout))
+	log.SetHandler(logJson.New(os.Stdout))
 
 	var args struct {
 		wait    time.Duration
@@ -49,10 +50,14 @@ func main() {
 	}
 
 	if args.debug {
+		log.SetHandler(logText.New(os.Stdout))
 		log.SetLevel(log.DebugLevel)
 	}
 
-	srv, _ := server.New(args.port, &args.storeOptions)
+	srv, err := server.New(args.port, &args.storeOptions)
+	if err != nil {
+		log.WithError(err).Fatal("failed to instantiate server")
+	}
 
 	ctx := context.WithValue(context.Background(), server.WaitContextKey, args.wait)
 	srv.Start(ctx)

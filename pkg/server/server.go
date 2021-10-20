@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"os/signal"
@@ -12,18 +11,20 @@ import (
 	"time"
 
 	"github.com/apex/log"
-	"github.com/bwmarrin/snowflake"
 	"github.com/gorilla/mux"
 	"golang.org/x/xerrors"
 
 	"github.com/hexbee-net/sketch-canvas/pkg/canvas"
 	"github.com/hexbee-net/sketch-canvas/pkg/datastore"
+	"github.com/hexbee-net/sketch-canvas/pkg/keygen"
 )
 
 type contextKey int
 
 const (
-	WaitContextKey contextKey = iota
+	RequestIDContextKey contextKey = iota
+	WaitContextKey      contextKey = iota
+	DatastoreContextKey contextKey = iota
 )
 
 const (
@@ -37,32 +38,24 @@ type Server struct {
 	srv          *http.Server
 	router       *mux.Router
 	storeOptions *datastore.RedisOptions
-	node         *snowflake.Node
+	keygen       keygen.KeyGen
 }
 
 func New(port int, storeOptions *datastore.RedisOptions) (*Server, error) {
-	node, err := snowflake.NewNode(1)
+	keyGen, err := keygen.New()
 	if err != nil {
-		return nil, xerrors.Errorf("failed to instantiate SnowFlake node: %w", err)
+		return nil, xerrors.Errorf("failed to instantiate key generator: %w", err)
 	}
 
 	s := Server{
 		port:         port,
 		storeOptions: storeOptions,
 		router:       mux.NewRouter(),
-		node:         node,
+		keygen:       keyGen,
 	}
+	s.router.Use(MiddlewareRequestID)
 
-	s.router.HandleFunc("/", s.getVersions).Methods("GET")
-
-	v1 := s.router.PathPrefix("/v1/").Subrouter()
-	v1.HandleFunc("/", s.getDocumentList).Methods(http.MethodGet)
-	v1.HandleFunc("/", s.createDocument).Methods(http.MethodPost)
-	v1.HandleFunc("/{id}", s.getDocuments).Methods(http.MethodGet)
-	v1.HandleFunc("/{id}", s.deleteDocument).Methods(http.MethodDelete)
-	v1.HandleFunc("/{id}/rect", s.addRectangle).Methods(http.MethodPost)
-	v1.HandleFunc("/{id}/fill", s.addFloodFill).Methods(http.MethodPost)
-	v1.Use(datastore.MiddlewareRedisDatastore(s.storeOptions))
+	s.setupRoutes(s.router, MiddlewareRedisDatastore(s.storeOptions))
 
 	s.srv = &http.Server{
 		Addr:         fmt.Sprintf("0.0.0.0:%d", s.port),
@@ -73,6 +66,19 @@ func New(port int, storeOptions *datastore.RedisOptions) (*Server, error) {
 	}
 
 	return &s, nil
+}
+
+func (s *Server) setupRoutes(router *mux.Router, datastoreMiddleware mux.MiddlewareFunc) {
+	router.HandleFunc("/", s.getVersions).Methods("GET")
+
+	v1 := router.PathPrefix("/v1/").Subrouter()
+	v1.HandleFunc("/", s.getDocumentList).Methods(http.MethodGet)
+	v1.HandleFunc("/", s.createDocument).Methods(http.MethodPost)
+	v1.HandleFunc("/{id}", s.getDocuments).Methods(http.MethodGet)
+	v1.HandleFunc("/{id}", s.deleteDocument).Methods(http.MethodDelete)
+	v1.HandleFunc("/{id}/rect", s.addRectangle).Methods(http.MethodPost)
+	v1.HandleFunc("/{id}/fill", s.addFloodFill).Methods(http.MethodPost)
+	v1.Use(datastoreMiddleware)
 }
 
 func (s *Server) Start(ctx context.Context) {
@@ -116,34 +122,50 @@ func (s *Server) getDocumentList(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) createDocument(w http.ResponseWriter, r *http.Request) {
-	var doc canvas.Canvas
+	var (
+		doc       canvas.Canvas
+		requestID = s.getRequestID(r)
+		reqLog    = log.
+				WithField("operation-id", "create-doc").
+				WithField("request-id", requestID)
+	)
+
+	reqLog.Debug("received create document request")
 
 	if err := json.NewDecoder(r.Body).Decode(&doc); err != nil {
+		reqLog.
+			WithField("body", r.Body).
+			WithError(err).
+			Infof("failed to decode request body")
 		http.Error(w, err.Error(), http.StatusBadRequest)
 
 		return
 	}
 
 	store := s.getStore(r)
-	id := s.node.Generate().String()
-	log.
-		WithField("doc-key", id).
-		Debug("received create document request")
+	id := s.keygen.Generate()
 
-	if err := store.SetDocument(id, doc, r.Context()); err != nil {
-		log.WithError(err).Error("failed to set document in redis store")
+	if err := store.SetDocument(id, &doc, r.Context()); err != nil {
+		reqLog.
+			WithError(err).
+			Error("failed to set document in redis store")
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 
 		return
 	}
 
+	reqLog.
+		WithField("doc-key", id).
+		Infof("document created")
+
 	w.WriteHeader(http.StatusCreated)
 
-	if _, err := io.WriteString(w, path.Join(r.RequestURI, id)); err != nil {
-		log.
-			WithError(err).
+	if _, err := w.Write([]byte(path.Join(r.RequestURI, id))); err != nil {
+		reqLog.
 			WithField("doc-key", id).
+			WithError(err).
 			Error("failed to write http response")
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 
 		return
 	}
@@ -166,10 +188,19 @@ func (s *Server) addFloodFill(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) getStore(r *http.Request) datastore.DataStore {
-	store, ok := r.Context().Value(datastore.ContextKey).(datastore.DataStore)
+	store, ok := r.Context().Value(DatastoreContextKey).(datastore.DataStore)
 	if !ok {
 		log.Fatal("could not find datastore in request context")
 	}
 
 	return store
+}
+
+func (s *Server) getRequestID(r *http.Request) int64 {
+	id, ok := r.Context().Value(RequestIDContextKey).(int64)
+	if !ok {
+		log.Error("failed to retrieve request id")
+	}
+
+	return id
 }

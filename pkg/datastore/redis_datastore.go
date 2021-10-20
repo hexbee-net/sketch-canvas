@@ -2,11 +2,9 @@ package datastore
 
 import (
 	"context"
-	"net/http"
 
 	"github.com/apex/log"
 	"github.com/go-redis/redis/v8"
-	"github.com/gorilla/mux"
 	"golang.org/x/xerrors"
 )
 
@@ -16,27 +14,6 @@ type RedisOptions struct {
 
 type RedisDataStore struct {
 	rdb *redis.Client
-}
-
-func MiddlewareRedisDatastore(storeOptions *RedisOptions) mux.MiddlewareFunc {
-	if storeOptions == nil {
-		log.Fatal("store options cannot be nil in middleware")
-	}
-
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			store, err := New(storeOptions, r.Context())
-			if err != nil {
-				log.WithError(err).Error("datastore is unreachable")
-				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-
-				return
-			}
-
-			ctx := context.WithValue(r.Context(), ContextKey, store)
-			next.ServeHTTP(w, r.WithContext(ctx))
-		})
-	}
 }
 
 // New creates a new RedisDataStore instance and check the connectivity to the Redis instance.
