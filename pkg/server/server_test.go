@@ -17,23 +17,34 @@ import (
 	"github.com/hexbee-net/sketch-canvas/pkg/canvas"
 	"github.com/hexbee-net/sketch-canvas/pkg/datastore"
 	datastoreMocks "github.com/hexbee-net/sketch-canvas/pkg/datastore/mocks"
-	"github.com/hexbee-net/sketch-canvas/pkg/keygen"
 	keygenMocks "github.com/hexbee-net/sketch-canvas/pkg/keygen/mocks"
 )
 
-func testServer(t *testing.T, keyGen keygen.KeyGen) Server {
+func testServer(t *testing.T) testSrv {
 	t.Helper()
 
-	return Server{
+	keyGen := &keygenMocks.KeyGen{}
+	mw, storeMock := MiddlewareMockDatastore(t)
+
+	server := &Server{
 		port:         0,
 		srv:          &http.Server{},
 		router:       mux.NewRouter(),
 		storeOptions: &datastore.RedisOptions{},
 		keygen:       keyGen,
 	}
+
+	server.router.Use(MiddlewareRequestID)
+	server.setupRoutes(server.router, mw)
+
+	return testSrv{
+		keyGenMock: keyGen,
+		storeMock:  storeMock,
+		server:     server,
+	}
 }
 
-func jsonMarshal(t *testing.T, v canvas.Canvas) []byte {
+func toJson(t *testing.T, v canvas.Canvas) []byte {
 	t.Helper()
 
 	ret, err := json.Marshal(v)
@@ -46,14 +57,14 @@ func jsonMarshal(t *testing.T, v canvas.Canvas) []byte {
 func MiddlewareMockDatastore(t *testing.T) (mux.MiddlewareFunc, *datastoreMocks.DataStore) {
 	t.Helper()
 
-	store := datastoreMocks.DataStore{}
+	store := &datastoreMocks.DataStore{}
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ctx := context.WithValue(r.Context(), DatastoreContextKey, &store)
+			ctx := context.WithValue(r.Context(), DatastoreContextKey, store)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
-	}, &store
+	}, store
 }
 
 func TestServer_createDocument(t *testing.T) {
@@ -79,7 +90,7 @@ func TestServer_createDocument(t *testing.T) {
 		{
 			name: "ok",
 			args: args{
-				body: jsonMarshal(t, canvas.Canvas{}),
+				body: toJson(t, canvas.Canvas{}),
 				cmd:  storeCommand{key: mock.Anything, value: mock.Anything, ret: nil},
 			},
 			response: response{
@@ -102,7 +113,7 @@ func TestServer_createDocument(t *testing.T) {
 		{
 			name: "store error",
 			args: args{
-				body: jsonMarshal(t, canvas.Canvas{}),
+				body: toJson(t, canvas.Canvas{}),
 				cmd:  storeCommand{key: mock.Anything, value: mock.Anything, ret: xerrors.New("FAILED")},
 			},
 			response: response{
@@ -112,18 +123,13 @@ func TestServer_createDocument(t *testing.T) {
 		}}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			keyGenMock := keygenMocks.KeyGen{}
-			server := testServer(t, &keyGenMock)
+			testSrv := testServer(t)
 
-			mw, storeMock := MiddlewareMockDatastore(t)
-			server.setupRoutes(server.router, mw)
-
-			keyGenMock.On("Generate").Return("123")
-			storeMock.On("SetDocument", tt.args.cmd.key, tt.args.cmd.value, mock.Anything).Return(tt.args.cmd.ret)
-
+			testSrv.keyGenMock.On("Generate").Return("123")
+			testSrv.storeMock.On("SetDocument", tt.args.cmd.key, tt.args.cmd.value, mock.Anything).Return(tt.args.cmd.ret)
 			w := httptest.NewRecorder()
 
-			server.router.ServeHTTP(w, httptest.NewRequest("POST", "/v1/", strings.NewReader(string(tt.args.body))))
+			testSrv.server.router.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/v1/", strings.NewReader(string(tt.args.body))))
 
 			assert.Equal(t, tt.response.code, w.Code)
 			if tt.checkBody {
@@ -131,4 +137,79 @@ func TestServer_createDocument(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestServer_getDocumentList(t *testing.T) {
+	type storeGetList struct {
+		cursor    uint64
+		count     int64
+		keys      []string
+		newCursor uint64
+		err       error
+	}
+	type storeGetSize struct {
+		size int64
+		err  error
+	}
+	type args struct {
+		query string
+	}
+	type response struct {
+		dbSize uint64
+		code   int
+		body   string
+	}
+	tests := []struct {
+		name         string
+		args         args
+		storeGetList storeGetList
+		storeGetSize storeGetSize
+		response     response
+		checkBody    bool
+	}{
+		{
+			name: "ok",
+			args: args{
+				query: "?q=0&limit=5",
+			},
+			storeGetList: storeGetList{
+				cursor:    0,
+				count:     5,
+				keys:      []string{"123", "456"},
+				newCursor: 7,
+				err:       nil,
+			},
+			storeGetSize: storeGetSize{
+				size: 2,
+				err:  nil,
+			},
+			response: response{
+				code: http.StatusOK,
+				body: `{"next":"/v1/docs/?limit=5&q=7","count":2,"total":2,"docs":{"123":"/v1/docs/123","456":"/v1/docs/456"}}`,
+			},
+			checkBody: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			testSrv := testServer(t)
+
+			testSrv.storeMock.On("GetDocList", tt.storeGetList.cursor, tt.storeGetList.count, mock.Anything).Return(tt.storeGetList.keys, tt.storeGetList.newCursor, tt.storeGetList.err)
+			testSrv.storeMock.On("GetSize", mock.Anything).Return(tt.storeGetSize.size, tt.storeGetSize.err)
+			w := httptest.NewRecorder()
+
+			testSrv.server.router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/v1/docs/"+tt.args.query, strings.NewReader("")))
+
+			assert.Equal(t, tt.response.code, w.Code)
+			if tt.checkBody {
+				assert.Equal(t, tt.response.body+"\n", w.Body.String())
+			}
+		})
+	}
+}
+
+type testSrv struct {
+	keyGenMock *keygenMocks.KeyGen
+	storeMock  *datastoreMocks.DataStore
+	server     *Server
 }

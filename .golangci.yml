@@ -23,7 +23,6 @@ linters:
     - durationcheck
     - exportloopref
     - forcetypeassert
-    - funlen
     - gci
     - gochecknoglobals
     - gochecknoinits
@@ -31,7 +30,7 @@ linters:
     - gocritic
     - gocyclo
     - godot
-    - godox
+#    - godox
     - gofmt
     - gomnd
     - gosec

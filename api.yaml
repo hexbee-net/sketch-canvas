@@ -97,7 +97,7 @@
                 "tags": [
                         "document"
                 ],
-                "operationId": "get-docs",
+                "operationId": "get-doc-list",
                 "description": "Get existing documents\n",
                 "parameters": [
                     {
@@ -106,15 +106,15 @@
                         },
                         "in": "query",
                         "name": "limit",
-                        "description": "The maximum number of documents to retrieve per page (default 5)"
+                        "description": "The maximum number of documents to retrieve per page (default 10)"
                     },
                     {
                         "schema": {
-                            "type": "integer"
+                            "type": "string"
                         },
                         "in": "query",
-                        "name": "page",
-                        "description": "The number of the page to get"
+                        "name": "q",
+                        "description": "The query key used for pagination"
                     }
                 ],
                 "responses": {
@@ -125,8 +125,9 @@
                                 "schema": {
                                     "type": "object",
                                     "properties": {
-                                        "links": {
-                                            "$ref": "#/components/schemas/PageLinks"
+                                        "next": {
+                                            "type": "string",
+                                            "format": "uri"
                                         },
                                         "count": {
                                             "type": "integer"
@@ -150,13 +151,7 @@
                                 "examples": {
                                     "example-1": {
                                         "value": {
-                                            "links": {
-                                                "self": "http://localhost:8800/v1/docs?page=3",
-                                                "first": "http://localhost:8800/v1/docs",
-                                                "prev": "http://localhost:8800/v1/docs?page=2",
-                                                "next": "http://localhost:8800/v1/docs?page=4",
-                                                "last": "http://localhost:8800/v1/docs?page=47"
-                                            },
+                                            "next": "http://localhost:8800/v1/docs?limit=5&q=17",
                                             "count": 5,
                                             "total": 234,
                                             "docs": {
@@ -188,7 +183,7 @@
                                 },
                                 "examples": {
                                     "example-1": {
-                                        "value": "/v1/1450261878193262592"
+                                        "value": "http://localhost:8800/v1/docs/11"
                                     }
                                 }
                             }
@@ -299,12 +294,12 @@
                         "description": "Not Found"
                     }
                 },
-                "operationId": "get-v1-id",
+                "operationId": "get-doc",
                 "description": "Get the content of a document"
             },
             "delete": {
                 "summary": "Delete document",
-                "operationId": "delete-v1-id",
+                "operationId": "delete-doc",
                 "responses": {
                     "200": {
                         "description": "OK"
@@ -319,7 +314,7 @@
                 "description": "Delete a document"
             }
         },
-        "/v1/{id}/rect": {
+        "/v1/docs/{id}/rect": {
             "parameters": [
                 {
                     "schema": {
@@ -332,7 +327,7 @@
             ],
             "post": {
                 "summary": "Add rectangle to document",
-                "operationId": "post-v1-id-rect",
+                "operationId": "add-rect",
                 "responses": {
                     "200": {
                         "description": "OK"
@@ -406,7 +401,7 @@
             ],
             "post": {
                 "summary": "Add flood-fill to document",
-                "operationId": "post-v1-id-fill",
+                "operationId": "add-flood-fill",
                 "responses": {
                     "200": {
                         "description": "OK"
@@ -505,36 +500,6 @@
                 "required": [
                         "width",
                         "height"
-                ]
-            },
-            "PageLinks": {
-                "title": "Paginated list links",
-                "type": "object",
-                "properties": {
-                    "self": {
-                        "type": "string",
-                        "format": "uri"
-                    },
-                    "first": {
-                        "type": "string",
-                        "format": "uri"
-                    },
-                    "prev": {
-                        "type": "string",
-                        "format": "uri"
-                    },
-                    "next": {
-                        "type": "string",
-                        "format": "uri"
-                    },
-                    "last": {
-                        "type": "string",
-                        "format": "uri"
-                    }
-                },
-                "required": [
-                        "first",
-                        "last"
                 ]
             },
             "Operation": {

@@ -13,6 +13,57 @@ type DataStore struct {
 	mock.Mock
 }
 
+// GetDocList provides a mock function with given fields: cursor, count, ctx
+func (_m *DataStore) GetDocList(cursor uint64, count int64, ctx context.Context) ([]string, uint64, error) {
+	ret := _m.Called(cursor, count, ctx)
+
+	var r0 []string
+	if rf, ok := ret.Get(0).(func(uint64, int64, context.Context) []string); ok {
+		r0 = rf(cursor, count, ctx)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]string)
+		}
+	}
+
+	var r1 uint64
+	if rf, ok := ret.Get(1).(func(uint64, int64, context.Context) uint64); ok {
+		r1 = rf(cursor, count, ctx)
+	} else {
+		r1 = ret.Get(1).(uint64)
+	}
+
+	var r2 error
+	if rf, ok := ret.Get(2).(func(uint64, int64, context.Context) error); ok {
+		r2 = rf(cursor, count, ctx)
+	} else {
+		r2 = ret.Error(2)
+	}
+
+	return r0, r1, r2
+}
+
+// GetSize provides a mock function with given fields: ctx
+func (_m *DataStore) GetSize(ctx context.Context) (int64, error) {
+	ret := _m.Called(ctx)
+
+	var r0 int64
+	if rf, ok := ret.Get(0).(func(context.Context) int64); ok {
+		r0 = rf(ctx)
+	} else {
+		r0 = ret.Get(0).(int64)
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context) error); ok {
+		r1 = rf(ctx)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // SetDocument provides a mock function with given fields: key, value, ctx
 func (_m *DataStore) SetDocument(key string, value interface{}, ctx context.Context) error {
 	ret := _m.Called(key, value, ctx)

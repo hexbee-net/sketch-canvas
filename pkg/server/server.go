@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -8,10 +9,12 @@ import (
 	"os"
 	"os/signal"
 	"path"
+	"strconv"
 	"time"
 
 	"github.com/apex/log"
 	"github.com/gorilla/mux"
+	"github.com/gorilla/schema"
 	"golang.org/x/xerrors"
 
 	"github.com/hexbee-net/sketch-canvas/pkg/canvas"
@@ -32,6 +35,8 @@ const (
 	readTimeout  = time.Second * 15
 	idleTimeout  = time.Second * 60
 )
+
+const DefaultPageLimit = 10
 
 type Server struct {
 	port         int
@@ -72,12 +77,12 @@ func (s *Server) setupRoutes(router *mux.Router, datastoreMiddleware mux.Middlew
 	router.HandleFunc("/", s.getVersions).Methods("GET")
 
 	v1 := router.PathPrefix("/v1/").Subrouter()
-	v1.HandleFunc("/", s.getDocumentList).Methods(http.MethodGet)
-	v1.HandleFunc("/", s.createDocument).Methods(http.MethodPost)
-	v1.HandleFunc("/{id}", s.getDocuments).Methods(http.MethodGet)
-	v1.HandleFunc("/{id}", s.deleteDocument).Methods(http.MethodDelete)
-	v1.HandleFunc("/{id}/rect", s.addRectangle).Methods(http.MethodPost)
-	v1.HandleFunc("/{id}/fill", s.addFloodFill).Methods(http.MethodPost)
+	v1.HandleFunc("/docs/", s.getDocumentList).Methods(http.MethodGet)
+	v1.HandleFunc("/docs/", s.createDocument).Methods(http.MethodPost)
+	v1.HandleFunc("/docs/{id}", s.getDocuments).Methods(http.MethodGet)
+	v1.HandleFunc("/docs/{id}", s.deleteDocument).Methods(http.MethodDelete)
+	v1.HandleFunc("/docs/{id}/rect", s.addRectangle).Methods(http.MethodPost)
+	v1.HandleFunc("/docs/{id}/fill", s.addFloodFill).Methods(http.MethodPost)
 	v1.Use(datastoreMiddleware)
 }
 
@@ -118,7 +123,97 @@ func (s *Server) getVersions(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) getDocumentList(w http.ResponseWriter, r *http.Request) {
-	log.Info("TODO: getDocumentList")
+	var (
+		url       = r.URL
+		store     = s.getStore(r)
+		requestID = s.getRequestID(r)
+		reqLog    = log.WithField("operation-id", "get-doc-list").WithField("request-id", requestID)
+	)
+
+	reqLog.Debug("received get document list request")
+
+	// Parse query parameters
+	req := struct {
+		Cursor uint64 `schema:"q"`
+		Limit  int64  `schema:"limit"`
+	}{
+		Cursor: 0,
+		Limit:  DefaultPageLimit,
+	}
+
+	if err := r.ParseForm(); err != nil {
+		reqLog.WithError(err).Warnf("invalid request: %s", r.RequestURI)
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+
+		return
+	}
+
+	if err := schema.NewDecoder().Decode(&req, r.Form); err != nil {
+		reqLog.WithError(err).Warnf("invalid request: %s", r.RequestURI)
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+
+		return
+	}
+
+	reqLog.WithField("cursor", req.Cursor).WithField("limit", req.Limit).Debug("request parameter")
+
+	// Retrieve a page of keys from the store.
+	keys, cursor, err := store.GetDocList(req.Cursor, req.Limit, r.Context())
+	if err != nil {
+		reqLog.WithError(err).Error("failed to get document list from redis store")
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+
+		return
+	}
+
+	var next string
+
+	// If the cursor is not 0, there are more values to retrieve.
+	// Format the URI of the next page.
+	if cursor != 0 {
+		queryValues := url.Query()
+		queryValues.Set("q", strconv.FormatUint(cursor, 10))       //nolint: gomnd
+		queryValues.Set("limit", strconv.FormatInt(req.Limit, 10)) //nolint: gomnd
+		url.RawQuery = queryValues.Encode()
+		next = url.String()
+	}
+
+	// We don't fail if we're unable to retrieve the number of keys in the store
+	// since it is not the most important thing in the query.
+	dbSize, err := store.GetSize(r.Context())
+	if err != nil {
+		reqLog.WithError(err).Error("failed to retrieve number of keys in store")
+	}
+
+	// Convert the list of keys to a map with the URI of each document.
+	//TODO: retrieve the document names instead of using the ID.
+	docs := make(map[string]string, len(keys))
+	for _, k := range keys {
+		docs[k] = path.Join(url.Path, k)
+	}
+
+	data, err := jsonMarshal(struct {
+		Next  string            `json:"next,omitempty"`
+		Count int               `json:"count"`
+		Total int64             `json:"total,omitempty"`
+		Docs  map[string]string `json:"docs"`
+	}{
+		Next:  next,
+		Count: len(keys),
+		Total: dbSize,
+		Docs:  docs,
+	})
+	if err != nil {
+		reqLog.WithError(err).Error("failed to marshal response to json")
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+
+		return
+	}
+
+	if _, err := w.Write(data); err != nil {
+		reqLog.WithError(err).Error("failed to write http response")
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+	}
 }
 
 func (s *Server) createDocument(w http.ResponseWriter, r *http.Request) {
@@ -166,8 +261,6 @@ func (s *Server) createDocument(w http.ResponseWriter, r *http.Request) {
 			WithError(err).
 			Error("failed to write http response")
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-
-		return
 	}
 }
 
@@ -187,6 +280,7 @@ func (s *Server) addFloodFill(w http.ResponseWriter, r *http.Request) {
 	log.Info("TODO: addFloodFill")
 }
 
+// getStore retrieves the data store connection from the context.
 func (s *Server) getStore(r *http.Request) datastore.DataStore {
 	store, ok := r.Context().Value(DatastoreContextKey).(datastore.DataStore)
 	if !ok {
@@ -196,6 +290,7 @@ func (s *Server) getStore(r *http.Request) datastore.DataStore {
 	return store
 }
 
+// getRequestID retrieves the id of the current request from the context.
 func (s *Server) getRequestID(r *http.Request) int64 {
 	id, ok := r.Context().Value(RequestIDContextKey).(int64)
 	if !ok {
@@ -203,4 +298,14 @@ func (s *Server) getRequestID(r *http.Request) int64 {
 	}
 
 	return id
+}
+
+// jsonMarshal returns the JSON encoding of v without encoding HTML characters.
+func jsonMarshal(v interface{}) ([]byte, error) {
+	buffer := &bytes.Buffer{}
+	encoder := json.NewEncoder(buffer)
+	encoder.SetEscapeHTML(false)
+	err := encoder.Encode(v)
+
+	return buffer.Bytes(), err
 }
