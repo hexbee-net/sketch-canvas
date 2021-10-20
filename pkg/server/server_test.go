@@ -95,7 +95,7 @@ func TestServer_createDocument(t *testing.T) {
 			},
 			response: response{
 				code: http.StatusCreated,
-				body: "/v1/123",
+				body: "/v1/docs/123",
 			},
 			checkBody: true,
 		},
@@ -129,7 +129,7 @@ func TestServer_createDocument(t *testing.T) {
 			testSrv.storeMock.On("SetDocument", tt.args.cmd.key, tt.args.cmd.value, mock.Anything).Return(tt.args.cmd.ret)
 			w := httptest.NewRecorder()
 
-			testSrv.server.router.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/v1/", strings.NewReader(string(tt.args.body))))
+			testSrv.server.router.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/v1/docs/", strings.NewReader(string(tt.args.body))))
 
 			assert.Equal(t, tt.response.code, w.Code)
 			if tt.checkBody {
