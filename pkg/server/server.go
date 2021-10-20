@@ -79,7 +79,7 @@ func (s *Server) setupRoutes(router *mux.Router, datastoreMiddleware mux.Middlew
 	v1 := router.PathPrefix("/v1/").Subrouter()
 	v1.HandleFunc("/docs/", s.getDocumentList).Methods(http.MethodGet)
 	v1.HandleFunc("/docs/", s.createDocument).Methods(http.MethodPost)
-	v1.HandleFunc("/docs/{id}", s.getDocuments).Methods(http.MethodGet)
+	v1.HandleFunc("/docs/{id}", s.getDocument).Methods(http.MethodGet)
 	v1.HandleFunc("/docs/{id}", s.deleteDocument).Methods(http.MethodDelete)
 	v1.HandleFunc("/docs/{id}/rect", s.addRectangle).Methods(http.MethodPost)
 	v1.HandleFunc("/docs/{id}/fill", s.addFloodFill).Methods(http.MethodPost)
@@ -120,14 +120,14 @@ func (s *Server) Start(ctx context.Context) {
 
 func (s *Server) getVersions(w http.ResponseWriter, r *http.Request) {
 	log.Info("TODO: getVersions")
+	w.Header().Set("Content-Type", "application/json")
 }
 
 func (s *Server) getDocumentList(w http.ResponseWriter, r *http.Request) {
 	var (
-		url       = r.URL
-		store     = s.getStore(r)
-		requestID = s.getRequestID(r)
-		reqLog    = log.WithField("operation-id", "get-doc-list").WithField("request-id", requestID)
+		url    = r.URL
+		store  = s.getStore(r)
+		reqLog = log.WithField("operation-id", "get-doc-list").WithField("request-id", s.getRequestID(r))
 	)
 
 	reqLog.Debug("received get document list request")
@@ -210,6 +210,8 @@ func (s *Server) getDocumentList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	w.Header().Set("Content-Type", "application/json")
+
 	if _, err := w.Write(data); err != nil {
 		reqLog.WithError(err).Error("failed to write http response")
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
@@ -218,54 +220,93 @@ func (s *Server) getDocumentList(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) createDocument(w http.ResponseWriter, r *http.Request) {
 	var (
-		doc       canvas.Canvas
-		requestID = s.getRequestID(r)
-		reqLog    = log.
-				WithField("operation-id", "create-doc").
-				WithField("request-id", requestID)
+		doc    canvas.Canvas
+		reqLog = log.WithField("operation-id", "create-doc").WithField("request-id", s.getRequestID(r))
+		store  = s.getStore(r)
 	)
 
 	reqLog.Debug("received create document request")
 
 	if err := json.NewDecoder(r.Body).Decode(&doc); err != nil {
-		reqLog.
-			WithField("body", r.Body).
-			WithError(err).
-			Infof("failed to decode request body")
+		reqLog.WithField("body", r.Body).WithError(err).Infof("failed to decode request body")
 		http.Error(w, err.Error(), http.StatusBadRequest)
 
 		return
 	}
 
-	store := s.getStore(r)
 	id := s.keygen.Generate()
 
 	if err := store.SetDocument(id, &doc, r.Context()); err != nil {
-		reqLog.
-			WithError(err).
-			Error("failed to set document in redis store")
+		reqLog.WithError(err).Error("failed to set document in redis store")
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 
 		return
 	}
 
-	reqLog.
-		WithField("doc-key", id).
-		Infof("document created")
+	reqLog.WithField("doc-key", id).Infof("document created")
 
 	w.WriteHeader(http.StatusCreated)
 
 	if _, err := w.Write([]byte(path.Join(r.RequestURI, id))); err != nil {
-		reqLog.
-			WithField("doc-key", id).
-			WithError(err).
-			Error("failed to write http response")
+		reqLog.WithField("doc-key", id).WithError(err).Error("failed to write http response")
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 	}
 }
 
-func (s *Server) getDocuments(w http.ResponseWriter, r *http.Request) {
-	log.Info("TODO: getDocuments")
+func (s *Server) getDocument(w http.ResponseWriter, r *http.Request) {
+	var (
+		url    = r.URL.String()
+		store  = s.getStore(r)
+		vars   = mux.Vars(r)
+		docID  = vars["id"]
+		reqLog = log.
+			WithField("operation-id", "get-doc").
+			WithField("request-id", s.getRequestID(r)).
+			WithField("doc-id", docID)
+	)
+
+	reqLog.Debug("received get document request")
+
+	doc, err := store.GetDocument(docID, r.Context())
+	if err != nil {
+		reqLog.WithError(err).Error("failed to get document from redis store")
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+
+		return
+	}
+
+	if doc == nil {
+		reqLog.Info("document not found")
+		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+
+		return
+	}
+
+	data, err := jsonMarshal(struct {
+		Operations map[string]string `json:"operations"`
+		Canvas     *canvas.Canvas
+	}{
+		Operations: map[string]string{
+			"delete-doc":     url,
+			"add-rect":       path.Join(url, "rect"),
+			"add-flood-fill": path.Join(url, "fill"),
+		},
+		Canvas: doc,
+	})
+
+	if err != nil {
+		reqLog.WithError(err).Error("failed to marshal response to json")
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	if _, err := w.Write(data); err != nil {
+		reqLog.WithError(err).Error("failed to write http response")
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+	}
 }
 
 func (s *Server) deleteDocument(w http.ResponseWriter, r *http.Request) {

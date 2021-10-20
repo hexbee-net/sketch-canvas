@@ -5,6 +5,8 @@ package mocks
 import (
 	context "context"
 
+	canvas "github.com/hexbee-net/sketch-canvas/pkg/canvas"
+
 	mock "github.com/stretchr/testify/mock"
 )
 
@@ -43,6 +45,29 @@ func (_m *DataStore) GetDocList(cursor uint64, count int64, ctx context.Context)
 	return r0, r1, r2
 }
 
+// GetDocument provides a mock function with given fields: key, ctx
+func (_m *DataStore) GetDocument(key string, ctx context.Context) (*canvas.Canvas, error) {
+	ret := _m.Called(key, ctx)
+
+	var r0 *canvas.Canvas
+	if rf, ok := ret.Get(0).(func(string, context.Context) *canvas.Canvas); ok {
+		r0 = rf(key, ctx)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*canvas.Canvas)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(string, context.Context) error); ok {
+		r1 = rf(key, ctx)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // GetSize provides a mock function with given fields: ctx
 func (_m *DataStore) GetSize(ctx context.Context) (int64, error) {
 	ret := _m.Called(ctx)
@@ -64,13 +89,13 @@ func (_m *DataStore) GetSize(ctx context.Context) (int64, error) {
 	return r0, r1
 }
 
-// SetDocument provides a mock function with given fields: key, value, ctx
-func (_m *DataStore) SetDocument(key string, value interface{}, ctx context.Context) error {
-	ret := _m.Called(key, value, ctx)
+// SetDocument provides a mock function with given fields: key, doc, ctx
+func (_m *DataStore) SetDocument(key string, doc *canvas.Canvas, ctx context.Context) error {
+	ret := _m.Called(key, doc, ctx)
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(string, interface{}, context.Context) error); ok {
-		r0 = rf(key, value, ctx)
+	if rf, ok := ret.Get(0).(func(string, *canvas.Canvas, context.Context) error); ok {
+		r0 = rf(key, doc, ctx)
 	} else {
 		r0 = ret.Error(0)
 	}

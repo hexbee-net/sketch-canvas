@@ -46,12 +46,12 @@ func New(options *RedisOptions, ctx context.Context) (*RedisDataStore, error) {
 }
 
 func (s *RedisDataStore) GetSize(ctx context.Context) (int64, error) {
-	cmd := s.rdb.DBSize(ctx)
-	if err := cmd.Err(); err != nil {
+	dbSize := s.rdb.DBSize(ctx)
+	if err := dbSize.Err(); err != nil {
 		return 0, xerrors.Errorf("failed to retrieve size of redis store: %w", err)
 	}
 
-	return cmd.Val(), nil
+	return dbSize.Val(), nil
 }
 
 func (s *RedisDataStore) GetDocList(cursor uint64, count int64, ctx context.Context) ([]string, uint64, error) {
@@ -66,21 +66,30 @@ func (s *RedisDataStore) GetDocList(cursor uint64, count int64, ctx context.Cont
 }
 
 func (s *RedisDataStore) SetDocument(key string, doc *canvas.Canvas, ctx context.Context) error {
-	if err := s.rdb.Set(ctx, key, doc, 0).Err(); err != nil {
-		return xerrors.Errorf("failed to set document in redis store: %w", err)
+	if set := s.rdb.Set(ctx, key, doc, 0).Err(); set != nil {
+		return xerrors.Errorf("failed to set document in redis store: %w", set)
 	}
 
 	return nil
 }
 
 func (s *RedisDataStore) GetDocument(key string, ctx context.Context) (*canvas.Canvas, error) {
-	cmd := s.rdb.Get(ctx, key)
-	if err := cmd.Err(); err != nil {
+	exists := s.rdb.Exists(ctx, key)
+	if err := exists.Err(); err != nil {
+		return nil, xerrors.Errorf("failed to check key presence in redis store: %w", err)
+	}
+
+	if exists.Val() == 0 {
+		return nil, nil
+	}
+
+	get := s.rdb.Get(ctx, key)
+	if err := get.Err(); err != nil {
 		return nil, xerrors.Errorf("failed to retrieve object from redis store: %w", err)
 	}
 
 	doc := canvas.Canvas{}
-	if err := json.NewDecoder(strings.NewReader(cmd.Val())).Decode(&doc); err != nil {
+	if err := json.NewDecoder(strings.NewReader(get.Val())).Decode(&doc); err != nil {
 		return nil, xerrors.Errorf("failed to unmarshal document from redis store: %w", err)
 	}
 

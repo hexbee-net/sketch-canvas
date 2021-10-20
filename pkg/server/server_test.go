@@ -20,6 +20,12 @@ import (
 	keygenMocks "github.com/hexbee-net/sketch-canvas/pkg/keygen/mocks"
 )
 
+type testSrv struct {
+	keyGenMock *keygenMocks.KeyGen
+	storeMock  *datastoreMocks.DataStore
+	server     *Server
+}
+
 func testServer(t *testing.T) testSrv {
 	t.Helper()
 
@@ -208,8 +214,75 @@ func TestServer_getDocumentList(t *testing.T) {
 	}
 }
 
-type testSrv struct {
-	keyGenMock *keygenMocks.KeyGen
-	storeMock  *datastoreMocks.DataStore
-	server     *Server
+func TestServer_getDocument(t *testing.T) {
+	type storeGetDocument struct {
+		docID string
+		doc   *canvas.Canvas
+		err   error
+	}
+	type response struct {
+		code int
+		body string
+	}
+	tests := []struct {
+		name             string
+		storeGetDocument storeGetDocument
+		response         response
+		checkBody        bool
+	}{
+		{
+			name: "ok",
+			storeGetDocument: storeGetDocument{
+				docID: "123",
+				doc:   &canvas.Canvas{Name: "doc1", Width: 80, Height: 50},
+				err:   nil,
+			},
+			response: response{
+				code: http.StatusOK,
+				body: `{"operations":{"add-flood-fill":"/v1/docs/123/fill","add-rect":"/v1/docs/123/rect","delete-doc":"/v1/docs/123"},"Canvas":{"name":"doc1","width":80,"height":50}}`,
+			},
+			checkBody: true,
+		},
+		{
+			name: "not found",
+			storeGetDocument: storeGetDocument{
+				docID: "123",
+				doc:   nil,
+				err:   nil,
+			},
+			response: response{
+				code: http.StatusNotFound,
+				body: ``,
+			},
+			checkBody: false,
+		},
+		{
+			name: "store error",
+			storeGetDocument: storeGetDocument{
+				docID: "123",
+				doc:   nil,
+				err:   xerrors.New("FAILED"),
+			},
+			response: response{
+				code: http.StatusInternalServerError,
+				body: ``,
+			},
+			checkBody: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			testSrv := testServer(t)
+
+			testSrv.storeMock.On("GetDocument", tt.storeGetDocument.docID, mock.Anything).Return(tt.storeGetDocument.doc, tt.storeGetDocument.err)
+			w := httptest.NewRecorder()
+
+			testSrv.server.router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/v1/docs/123", strings.NewReader("")))
+
+			assert.Equal(t, tt.response.code, w.Code)
+			if tt.checkBody {
+				assert.Equal(t, tt.response.body+"\n", w.Body.String())
+			}
+		})
+	}
 }

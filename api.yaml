@@ -252,10 +252,7 @@
                                     "type": "object",
                                     "properties": {
                                         "operations": {
-                                            "type": "object",
-                                            "additionalProperties": {
-                                                "$ref": "#/components/schemas/Operation"
-                                            }
+                                            "$ref": "#/components/schemas/Operations"
                                         },
                                         "canvas": {
                                             "$ref": "#/components/schemas/Canvas"
@@ -266,18 +263,9 @@
                                     "example-1": {
                                         "value": {
                                             "operations": {
-                                                "delete": {
-                                                    "name": "Delete document",
-                                                    "href": "http://127.0.0.1:8800/v1/123"
-                                                },
-                                                "add-rectangle": {
-                                                    "name": "Add rectangle",
-                                                    "href": "http://127.0.0.1:8800/v1/123/rect"
-                                                },
-                                                "add-fill": {
-                                                    "name": "Fill area",
-                                                    "href": "http://127.0.0.1:8800/v1/123/fill"
-                                                }
+                                                "delete-doc": "http://127.0.0.1:8800/v1/123",
+                                                "add-rect": "http://127.0.0.1:8800/v1/123/rect",
+                                                "add-flood-fill": "http://127.0.0.1:8800/v1/123/fill"
                                             },
                                             "canvas": {
                                                 "width": 80,
@@ -502,19 +490,18 @@
                         "height"
                 ]
             },
-            "Operation": {
-                "title": "Operation",
+            "Operations": {
+                "title": "Operations",
                 "type": "object",
+                "additionalProperties": {
+                    "type": "string",
+                    "format": "uri"
+                },
                 "description": "Available operations on a document",
-                "properties": {
-                    "id": {
-                        "type": "string"
-                    },
-                    "name": {
-                        "type": "string"
-                    },
-                    "href": {
-                        "type": "string"
+                "x-examples": {
+                    "example-1": {
+                        "operation1": "http://example.com",
+                        "operation2": "http://example.com"
                     }
                 }
             },
