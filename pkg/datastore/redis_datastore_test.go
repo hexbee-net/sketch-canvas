@@ -276,7 +276,11 @@ func TestRedisDataStore_GetDocument(t *testing.T) {
 	type args struct {
 		key string
 	}
-	type command struct {
+	type existCommand struct {
+		value int64
+		err   error
+	}
+	type getCommand struct {
 		value string
 		err   error
 	}
@@ -284,18 +288,23 @@ func TestRedisDataStore_GetDocument(t *testing.T) {
 		doc *canvas.Canvas
 	}
 	tests := []struct {
-		name     string
-		args     args
-		cmd      command
-		expected expected
-		wantErr  bool
+		name         string
+		args         args
+		existCommand existCommand
+		getCommand   *getCommand
+		expected     expected
+		wantErr      bool
 	}{
 		{
-			name: "redis OK",
+			name: "ok",
 			args: args{
 				key: "123",
 			},
-			cmd: command{
+			existCommand: existCommand{
+				value: 1,
+				err:   nil,
+			},
+			getCommand: &getCommand{
 				value: `{"name":"doc1","width":80,"height":25,"data":"-#-"}`,
 				err:   nil,
 			},
@@ -310,11 +319,30 @@ func TestRedisDataStore_GetDocument(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "redis error",
+			name: "exists error",
 			args: args{
 				"123",
 			},
-			cmd: command{
+			existCommand: existCommand{
+				value: 0,
+				err:   xerrors.New("FAILED"),
+			},
+			getCommand: nil,
+			expected: expected{
+				doc: nil,
+			},
+			wantErr: true,
+		},
+		{
+			name: "get error",
+			args: args{
+				"123",
+			},
+			existCommand: existCommand{
+				value: 1,
+				err:   nil,
+			},
+			getCommand: &getCommand{
 				value: "",
 				err:   xerrors.New("FAILED"),
 			},
@@ -328,7 +356,11 @@ func TestRedisDataStore_GetDocument(t *testing.T) {
 			args: args{
 				"123",
 			},
-			cmd: command{
+			existCommand: existCommand{
+				value: 1,
+				err:   nil,
+			},
+			getCommand: &getCommand{
 				value: "invalid",
 				err:   nil,
 			},
@@ -342,7 +374,11 @@ func TestRedisDataStore_GetDocument(t *testing.T) {
 			args: args{
 				"123",
 			},
-			cmd: command{
+			existCommand: existCommand{
+				value: 1,
+				err:   nil,
+			},
+			getCommand: &getCommand{
 				value: "",
 				err:   nil,
 			},
@@ -350,6 +386,21 @@ func TestRedisDataStore_GetDocument(t *testing.T) {
 				doc: nil,
 			},
 			wantErr: true,
+		},
+		{
+			name: "not found",
+			args: args{
+				"123",
+			},
+			existCommand: existCommand{
+				value: 0,
+				err:   nil,
+			},
+			getCommand: nil,
+			expected: expected{
+				doc: nil,
+			},
+			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
@@ -359,9 +410,15 @@ func TestRedisDataStore_GetDocument(t *testing.T) {
 				rdb: db,
 			}
 
-			cmd := mock.ExpectGet(tt.args.key)
-			cmd.SetVal(tt.cmd.value)
-			cmd.SetErr(tt.cmd.err)
+			expectExists := mock.ExpectExists(tt.args.key)
+			expectExists.SetVal(tt.existCommand.value)
+			expectExists.SetErr(tt.existCommand.err)
+
+			if tt.getCommand != nil {
+				expectGet := mock.ExpectGet(tt.args.key)
+				expectGet.SetVal(tt.getCommand.value)
+				expectGet.SetErr(tt.getCommand.err)
+			}
 
 			doc, err := s.GetDocument(tt.args.key, context.TODO())
 			assert.Equal(t, tt.expected.doc, doc)
