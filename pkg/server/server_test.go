@@ -286,3 +286,56 @@ func TestServer_getDocument(t *testing.T) {
 		})
 	}
 }
+
+func TestServer_deleteDocument(t *testing.T) {
+	type storeDeleteDocument struct {
+		docID string
+		err   error
+	}
+	tests := []struct {
+		name                string
+		storeDeleteDocument storeDeleteDocument
+		response            int
+		checkBody           bool
+	}{
+		{
+			name: "ok",
+			storeDeleteDocument: storeDeleteDocument{
+				docID: "123",
+				err:   nil,
+			},
+			response:  http.StatusNoContent,
+			checkBody: true,
+		},
+		{
+			name: "not found",
+			storeDeleteDocument: storeDeleteDocument{
+				docID: "123",
+				err:   datastore.NotFound,
+			},
+			response:  http.StatusNotFound,
+			checkBody: false,
+		},
+		{
+			name: "store error",
+			storeDeleteDocument: storeDeleteDocument{
+				docID: "123",
+				err:   xerrors.New("FAILED"),
+			},
+			response:  http.StatusInternalServerError,
+			checkBody: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			testSrv := testServer(t)
+
+			testSrv.storeMock.On("DeleteDocument", tt.storeDeleteDocument.docID, mock.Anything).Return(tt.storeDeleteDocument.err)
+			w := httptest.NewRecorder()
+
+			testSrv.server.router.ServeHTTP(w, httptest.NewRequest(http.MethodDelete, "/v1/docs/123", strings.NewReader("")))
+
+			assert.Equal(t, tt.response, w.Code)
+		})
+	}
+}

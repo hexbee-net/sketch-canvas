@@ -127,7 +127,9 @@ func (s *Server) getDocumentList(w http.ResponseWriter, r *http.Request) {
 	var (
 		url    = r.URL
 		store  = s.getStore(r)
-		reqLog = log.WithField("operation-id", "get-doc-list").WithField("request-id", s.getRequestID(r))
+		reqLog = log.
+			WithField("operation-id", "get-doc-list").
+			WithField("request-id", s.getRequestID(r))
 	)
 
 	reqLog.Debug("received get document list request")
@@ -155,7 +157,10 @@ func (s *Server) getDocumentList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	reqLog.WithField("cursor", req.Cursor).WithField("limit", req.Limit).Debug("request parameter")
+	reqLog.
+		WithField("cursor", req.Cursor).
+		WithField("limit", req.Limit).
+		Debug("request parameter")
 
 	// Retrieve a page of keys from the store.
 	keys, cursor, err := store.GetDocList(req.Cursor, req.Limit, r.Context())
@@ -221,8 +226,10 @@ func (s *Server) getDocumentList(w http.ResponseWriter, r *http.Request) {
 func (s *Server) createDocument(w http.ResponseWriter, r *http.Request) {
 	var (
 		doc    canvas.Canvas
-		reqLog = log.WithField("operation-id", "create-doc").WithField("request-id", s.getRequestID(r))
 		store  = s.getStore(r)
+		reqLog = log.
+			WithField("operation-id", "create-doc").
+			WithField("request-id", s.getRequestID(r))
 	)
 
 	reqLog.Debug("received create document request")
@@ -243,7 +250,9 @@ func (s *Server) createDocument(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	reqLog.WithField("doc-key", id).Infof("document created")
+	reqLog.
+		WithField("doc-id", id).
+		Infof("document created")
 
 	w.WriteHeader(http.StatusCreated)
 
@@ -309,7 +318,36 @@ func (s *Server) getDocument(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) deleteDocument(w http.ResponseWriter, r *http.Request) {
-	log.Info("TODO: deleteDocument")
+	var (
+		store  = s.getStore(r)
+		vars   = mux.Vars(r)
+		docID  = vars["id"]
+		reqLog = log.
+			WithField("operation-id", "delete-doc").
+			WithField("request-id", s.getRequestID(r)).
+			WithField("doc-id", docID)
+	)
+
+	reqLog.Debug("received delete document request")
+
+	err := store.DeleteDocument(docID, r.Context())
+	if err != nil {
+		switch err {
+		case datastore.NotFound:
+			reqLog.Info("document not found")
+			http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+		case err:
+			reqLog.WithError(err).Error("failed to marshal response to json")
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		}
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+
+	if _, err := w.Write([]byte("removed")); err != nil {
+		reqLog.WithError(err).Error("failed to write http response")
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+	}
 }
 
 func (s *Server) addRectangle(w http.ResponseWriter, r *http.Request) {
