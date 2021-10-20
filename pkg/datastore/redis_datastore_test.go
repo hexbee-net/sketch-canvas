@@ -189,3 +189,83 @@ func TestRedisDataStore_SetDocument(t *testing.T) {
 		})
 	}
 }
+
+func TestRedisDataStore_GetDocList(t *testing.T) {
+	type args struct {
+		cursor uint64
+		count  int64
+	}
+	type command struct {
+		page   []string
+		cursor uint64
+		err    error
+	}
+	type expected struct {
+		keys   []string
+		cursor uint64
+	}
+	tests := []struct {
+		name     string
+		args     args
+		cmd      command
+		expected expected
+		wantErr  bool
+	}{
+		{
+			name: "redis OK",
+			args: args{
+				cursor: 0,
+				count:  10,
+			},
+			cmd: command{
+				page:   []string{"123", "456"},
+				cursor: 3,
+				err:    nil,
+			},
+			expected: expected{
+				keys:   []string{"123", "456"},
+				cursor: 3,
+			},
+			wantErr: false,
+		},
+		{
+			name: "redis error",
+			args: args{
+				cursor: 0,
+				count:  10,
+			},
+			cmd: command{
+				page:   []string{"123", "456"},
+				cursor: 3,
+				err:    xerrors.New("FAILED"),
+			},
+			expected: expected{
+				keys:   nil,
+				cursor: 0,
+			},
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db, mock := redismock.NewClientMock()
+			s := &RedisDataStore{
+				rdb: db,
+			}
+
+			cmd := mock.ExpectScan(tt.args.cursor, "", tt.args.count)
+			cmd.SetVal(tt.cmd.page, tt.cmd.cursor)
+			cmd.SetErr(tt.cmd.err)
+
+			keys, cursor, err := s.GetDocList(tt.args.cursor, tt.args.count, context.TODO())
+			if (err != nil) != tt.wantErr {
+				t.Errorf("SetDocument() error = %v, wantErr %v", err, tt.wantErr)
+			}
+
+			assert.Equal(t, tt.expected.keys, keys)
+			assert.Equal(t, tt.expected.cursor, cursor)
+
+			assert.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}

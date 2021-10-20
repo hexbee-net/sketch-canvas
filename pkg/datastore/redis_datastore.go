@@ -42,11 +42,23 @@ func New(options *RedisOptions, ctx context.Context) (*RedisDataStore, error) {
 }
 
 func (s *RedisDataStore) GetSize(ctx context.Context) (int64, error) {
-	size := s.rdb.DBSize(ctx)
-	if err := size.Err(); err != nil {
+	cmd := s.rdb.DBSize(ctx)
+	if err := cmd.Err(); err != nil {
 		return 0, xerrors.Errorf("failed to retrieve size of redis store: %w", err)
 	}
-	return size.Val(), nil
+
+	return cmd.Val(), nil
+}
+
+func (s *RedisDataStore) GetDocList(cursor uint64, count int64, ctx context.Context) ([]string, uint64, error) {
+	cmd := s.rdb.Scan(ctx, cursor, "", count)
+	if err := cmd.Err(); err != nil {
+		return nil, 0, xerrors.Errorf("failed to retrieve documents from redis store: %w", err)
+	}
+
+	keys, cursor := cmd.Val()
+
+	return keys, cursor, nil
 }
 
 func (s *RedisDataStore) SetDocument(key string, value interface{}, ctx context.Context) error {
