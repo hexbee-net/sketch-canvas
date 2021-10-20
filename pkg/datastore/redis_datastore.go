@@ -80,7 +80,7 @@ func (s *RedisDataStore) GetDocument(key string, ctx context.Context) (*canvas.C
 	}
 
 	if exists.Val() == 0 {
-		return nil, nil
+		return nil, NotFound
 	}
 
 	get := s.rdb.Get(ctx, key)

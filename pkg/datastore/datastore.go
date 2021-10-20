@@ -6,6 +6,14 @@ import (
 	"github.com/hexbee-net/sketch-canvas/pkg/canvas"
 )
 
+type StoreError string
+
+func (s StoreError) Error() string {
+	return string(s)
+}
+
+const NotFound = StoreError("not found")
+
 //go:generate mockery --name DataStore
 type DataStore interface {
 	GetSize(ctx context.Context) (int64, error)

@@ -248,7 +248,7 @@ func TestServer_getDocument(t *testing.T) {
 			storeGetDocument: storeGetDocument{
 				docID: "123",
 				doc:   nil,
-				err:   nil,
+				err:   datastore.NotFound,
 			},
 			response: response{
 				code: http.StatusNotFound,

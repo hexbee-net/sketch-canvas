@@ -269,15 +269,14 @@ func (s *Server) getDocument(w http.ResponseWriter, r *http.Request) {
 
 	doc, err := store.GetDocument(docID, r.Context())
 	if err != nil {
-		reqLog.WithError(err).Error("failed to get document from redis store")
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-
-		return
-	}
-
-	if doc == nil {
-		reqLog.Info("document not found")
-		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+		switch err {
+		case datastore.NotFound:
+			reqLog.Info("document not found")
+			http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+		case err:
+			reqLog.WithError(err).Error("failed to marshal response to json")
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		}
 
 		return
 	}

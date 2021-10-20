@@ -400,7 +400,7 @@ func TestRedisDataStore_GetDocument(t *testing.T) {
 			expected: expected{
 				doc: nil,
 			},
-			wantErr: false,
+			wantErr: true,
 		},
 	}
 	for _, tt := range tests {
