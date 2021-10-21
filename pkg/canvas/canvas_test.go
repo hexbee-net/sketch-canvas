@@ -6,6 +6,17 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestCanvas_Split(t *testing.T) {
+	c := Canvas{
+		Width:  4,
+		Height: 4,
+		Data:   []byte("12345678abcdefgh"),
+	}
+
+	lines := c.Split()
+	assert.Equal(t, []string{"1234", "5678", "abcd", "efgh"}, lines)
+}
+
 func TestCanvas_DrawRect(t *testing.T) {
 	c := Canvas{
 		Width:  10,
@@ -45,13 +56,45 @@ func TestCanvas_DrawRect(t *testing.T) {
 	assert.Equal(t, expected, string(c.Data))
 }
 
-func TestCanvas_Split(t *testing.T) {
+func TestCanvas_FloodFill(t *testing.T) {
+	startState :=
+		"" +
+			"----------" +
+			"----------" +
+			"--*****---" +
+			"--*----*--" +
+			"--*-----*-" +
+			"-*-----*--" +
+			"--*---*---" +
+			"--*----*--" +
+			"---****---" +
+			"----------" +
+			""
+	expectedState :=
+		"" +
+			"----------" +
+			"----------" +
+			"--*****---" +
+			"--*@@@@*--" +
+			"--*@@@@@*-" +
+			"-*@@@@@*--" +
+			"--*@@@*---" +
+			"--*@@@@*--" +
+			"---****---" +
+			"----------" +
+			""
 	c := Canvas{
-		Width:  4,
-		Height: 4,
-		Data:   []byte("12345678abcdefgh"),
+		Width:  10,
+		Height: 10,
+		Data:   []byte(startState),
 	}
 
-	lines := c.Split()
-	assert.Equal(t, []string{"1234", "5678", "abcd", "efgh"}, lines)
+	origin := &Point{
+		X: 5,
+		Y: 4,
+	}
+
+	err := c.FloodFill(origin, "@")
+	assert.NoError(t, err)
+	assert.Equal(t, expectedState, string(c.Data))
 }
