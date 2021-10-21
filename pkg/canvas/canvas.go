@@ -24,7 +24,7 @@ func (c *Canvas) MarshalBinary() (data []byte, err error) {
 	return data, nil
 }
 
-// Split returns the content of the canvas split into lines
+// Split returns the content of the canvas split into lines.
 func (c *Canvas) Split() []string {
 	if len(c.Data) == 0 {
 		c.initData(backgroundChar)
@@ -126,103 +126,47 @@ func (c *Canvas) FloodFill(origin *Point, fill string) error {
 
 	if len(c.Data) == 0 {
 		c.initData(fill[0])
+
 		return nil
 	}
 
-	ov := c.Data[origin.Y*c.Width+origin.X]
 	fillChar := fill[0]
+	orgChar := c.Data[origin.Y*c.Width+origin.X]
 
-	if ov == fillChar {
+	if orgChar == fillChar {
 		return nil
 	}
 
-	type stackEntry struct {
-		xl, xr, y, dy int
+	dir := []struct{ x, y int }{
+		{-1, 0},
+		{0, 1},
+		{1, 0},
+		{0, -1},
 	}
 
-	stack := []stackEntry{
-		{int(origin.X), int(origin.X), int(origin.Y), 1},      // needed in some cases
-		{int(origin.X), int(origin.X), int(origin.Y) + 1, -1}, // seed segment (popped 1st)
-	}
-
-	const wx0 = 0
-	const wy0 = 0
-	wx1 := int(c.Width) - 1
-	wy1 := int(c.Height) - 1
-
-	push := func(xl, xr, y, dy int) {
-		if y+dy >= wy0 && y+dy <= wy1 {
-			stack = append(stack, stackEntry{xl: xl, xr: xr - 1, y: y, dy: dy})
-		}
-	}
-	pop := func() (xl, xr, y, dy int) {
-		v := stack[len(stack)-1]
-		stack = stack[:len(stack)-1]
-
-		return v.xl, v.xr, v.y + v.dy, v.dy
-	}
-	set := func(x, y int) {
-		c.Data[y*int(c.Width)+x] = fillChar
-	}
-	get := func(x, y int) byte {
-		return c.Data[y*int(c.Width)+x]
-	}
-
-	dbgSplit("", c)
-
-	for len(stack) > 0 {
-		x1, x2, y, dy := pop() // pop segment off stack and fill a neighboring scan line
-
-		// segment of scan line y-dy for x1<=x<=x2 was previously filled,
-		// now explore adjacent pixels in scan line y
-
-		x := x1
-
-		for x >= wx0 && get(x, y) == ov {
-			set(x, y)
-			x--
+	var recFill func(x, y uint)
+	recFill = func(x, y uint) {
+		if c.get(x, y) == fillChar {
+			return
 		}
 
-		var l int
+		c.set(x, y, fillChar)
 
-		if x >= x1 {
-			x++
-			for x <= x2 && get(x, y) != ov {
-				x++
+		for _, d := range dir {
+			if int(x)+d.x < 0 || int(y)+d.y < 0 {
+				return
 			}
 
-			l = x
-		} else {
-			l = x + 1
-			if l < x1 { // leak on left?
-				push(l, x1-1, y, -dy)
-			}
-			x = x1 + 1
-		}
+			dx := uint(int(x) + d.x)
+			dy := uint(int(y) + d.y)
 
-		for {
-			for x <= wx1 && get(x, y) == ov {
-				set(x, y)
-				x++
-			}
-			push(l, x-1, y, dy)
-
-			if x > x2+1 {
-				push(x2+1, x-1, y, -dy) // leak on right?
-			}
-
-			x++
-			for x <= x2 && get(x, y) != ov {
-				x++
-			}
-
-			l = x
-
-			if x > x2 {
-				break
+			if dx < c.Width && dy < c.Height && c.get(dx, dy) == orgChar {
+				recFill(dx, dy)
 			}
 		}
 	}
+
+	recFill(origin.X, origin.Y)
 
 	return nil
 }
@@ -232,4 +176,12 @@ func (c *Canvas) initData(v byte) {
 	for i := range c.Data {
 		c.Data[i] = v
 	}
+}
+
+func (c *Canvas) set(x, y uint, v byte) {
+	c.Data[y*c.Width+x] = v
+}
+
+func (c *Canvas) get(x, y uint) byte {
+	return c.Data[y*c.Width+x]
 }
