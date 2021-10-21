@@ -14,4 +14,4 @@ services:
             -   redis
         ports:
             - "8800:8800"
-        command: -s "redis:6379" -p 8800
+        command: -s "redis:6379" -p 8800 -v
