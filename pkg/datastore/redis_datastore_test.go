@@ -305,7 +305,7 @@ func TestRedisDataStore_GetDocument(t *testing.T) {
 				err:   nil,
 			},
 			getCommand: &getCommand{
-				value: `{"name":"doc1","width":80,"height":25,"data":"-#-"}`,
+				value: `{"name":"doc1","width":80,"height":25}`,
 				err:   nil,
 			},
 			expected: expected{
@@ -313,7 +313,6 @@ func TestRedisDataStore_GetDocument(t *testing.T) {
 					Name:   "doc1",
 					Width:  80,
 					Height: 25,
-					Data:   "-#-",
 				},
 			},
 			wantErr: false,

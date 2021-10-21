@@ -371,12 +371,17 @@ func TestServer_Operations(t *testing.T) {
 			name: "rect ok",
 			args: args{
 				operation: "rect",
-				body:      `{"rect":{"origin":{"x":5,"y":5},"width":10,"height":4},"fill":"X","outline":"@"}`,
+				body:      `{"rect":{"origin":{"x":2,"y":3},"width":4,"height":5},"fill":"X","outline":"@"}`,
 			},
 			getCommand: storeGetCommand{
 				docID: mock.Anything,
-				doc:   &canvas.Canvas{},
-				err:   nil,
+				doc: &canvas.Canvas{
+					Name:   "doc1",
+					Width:  10,
+					Height: 10,
+					Data:   nil,
+				},
+				err: nil,
 			},
 			setCommand: storeSetCommand{
 				docID: mock.Anything,
@@ -417,8 +422,13 @@ func TestServer_Operations(t *testing.T) {
 			},
 			getCommand: storeGetCommand{
 				docID: mock.Anything,
-				doc:   &canvas.Canvas{},
-				err:   nil,
+				doc: &canvas.Canvas{
+					Name:   "doc1",
+					Width:  10,
+					Height: 10,
+					Data:   nil,
+				},
+				err: nil,
 			},
 			setCommand: storeSetCommand{
 				docID: mock.Anything,

@@ -7,8 +7,8 @@ import (
 )
 
 type Point struct {
-	X int `json:"x"`
-	Y int `json:"y"`
+	X uint `json:"x"`
+	Y uint `json:"y"`
 }
 
 func (c *Point) MarshalBinary() (data []byte, err error) {
